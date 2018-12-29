@@ -20,78 +20,73 @@ limitations under the License.
 package cache
 
 import (
-	"sync"
+	"k8s.io/client-go/tools/metrics"
 )
 
-// GaugeMetric represents a single numerical value that can arbitrarily go up
-// and down.
-type GaugeMetric interface {
-	Set(float64)
+var (
+	listsTotal = metrics.NewCounterVec(metrics.Counter{
+		Name:      "reflector_lists_total",
+		Help:      "Total number of API lists done by the reflectors",
+	}, "name")
+
+	listsDuration = metrics.NewHistogramVec(metrics.Histogram{
+		Name:      "reflector_list_duration_seconds",
+		Help:      "How long an API list takes to return and decode for the reflectors",
+	}, "name")
+
+	itemsPerList = metrics.NewHistogramVec(metrics.Histogram{
+		Name:      "reflector_items_per_list",
+		Help:      "How many items an API list returns to the reflectors",
+	}, "name")
+
+	watchesTotal = metrics.NewCounterVec(metrics.Counter{
+		Name:      "reflector_watches_total",
+		Help:      "Total number of API watches done by the reflectors",
+	}, "name")
+
+	shortWatchesTotal = metrics.NewCounterVec(metrics.Counter{
+		Name:      "reflector_short_watches_total",
+		Help:      "Total number of short API watches done by the reflectors",
+	}, "name")
+
+	watchDuration = metrics.NewHistogramVec(metrics.Histogram{
+		Name:      "reflector_watch_duration_seconds",
+		Help:      "How long an API watch takes to return and decode for the reflectors",
+	}, "name")
+
+	itemsPerWatch = metrics.NewHistogramVec(metrics.Histogram{
+		Name:      "reflector_items_per_watch",
+		Help:      "How many items an API watch returns to the reflectors",
+	}, "name")
+
+	lastResourceVersion = metrics.NewGaugeVec(metrics.Gauge{
+		Name:      "reflector_last_resource_version",
+		Help:      "Last resource version seen for the reflectors",
+	}, "name")
+)
+
+func init() {
+	listsTotal.MustRegisterIn(metrics.DefaultRegistry())
+	listsDuration.MustRegisterIn(metrics.DefaultRegistry())
+	itemsPerList.MustRegisterIn(metrics.DefaultRegistry())
+	watchesTotal.MustRegisterIn(metrics.DefaultRegistry())
+	shortWatchesTotal.MustRegisterIn(metrics.DefaultRegistry())
+	watchDuration.MustRegisterIn(metrics.DefaultRegistry())
+	itemsPerWatch.MustRegisterIn(metrics.DefaultRegistry())
+	lastResourceVersion.MustRegisterIn(metrics.DefaultRegistry())
 }
-
-// CounterMetric represents a single numerical value that only ever
-// goes up.
-type CounterMetric interface {
-	Inc()
-}
-
-// SummaryMetric captures individual observations.
-type SummaryMetric interface {
-	Observe(float64)
-}
-
-type noopMetric struct{}
-
-func (noopMetric) Inc()            {}
-func (noopMetric) Dec()            {}
-func (noopMetric) Observe(float64) {}
-func (noopMetric) Set(float64)     {}
 
 type reflectorMetrics struct {
-	numberOfLists       CounterMetric
-	listDuration        SummaryMetric
-	numberOfItemsInList SummaryMetric
+	numberOfLists       metrics.CounterImpl
+	listDuration        metrics.HistogramImpl
+	numberOfItemsInList metrics.HistogramImpl
 
-	numberOfWatches      CounterMetric
-	numberOfShortWatches CounterMetric
-	watchDuration        SummaryMetric
-	numberOfItemsInWatch SummaryMetric
+	numberOfWatches      metrics.CounterImpl
+	numberOfShortWatches metrics.CounterImpl
+	watchDuration        metrics.HistogramImpl
+	numberOfItemsInWatch metrics.HistogramImpl
 
-	lastResourceVersion GaugeMetric
-}
-
-// MetricsProvider generates various metrics used by the reflector.
-type MetricsProvider interface {
-	NewListsMetric(name string) CounterMetric
-	NewListDurationMetric(name string) SummaryMetric
-	NewItemsInListMetric(name string) SummaryMetric
-
-	NewWatchesMetric(name string) CounterMetric
-	NewShortWatchesMetric(name string) CounterMetric
-	NewWatchDurationMetric(name string) SummaryMetric
-	NewItemsInWatchMetric(name string) SummaryMetric
-
-	NewLastResourceVersionMetric(name string) GaugeMetric
-}
-
-type noopMetricsProvider struct{}
-
-func (noopMetricsProvider) NewListsMetric(name string) CounterMetric         { return noopMetric{} }
-func (noopMetricsProvider) NewListDurationMetric(name string) SummaryMetric  { return noopMetric{} }
-func (noopMetricsProvider) NewItemsInListMetric(name string) SummaryMetric   { return noopMetric{} }
-func (noopMetricsProvider) NewWatchesMetric(name string) CounterMetric       { return noopMetric{} }
-func (noopMetricsProvider) NewShortWatchesMetric(name string) CounterMetric  { return noopMetric{} }
-func (noopMetricsProvider) NewWatchDurationMetric(name string) SummaryMetric { return noopMetric{} }
-func (noopMetricsProvider) NewItemsInWatchMetric(name string) SummaryMetric  { return noopMetric{} }
-func (noopMetricsProvider) NewLastResourceVersionMetric(name string) GaugeMetric {
-	return noopMetric{}
-}
-
-var metricsFactory = struct {
-	metricsProvider MetricsProvider
-	setProviders    sync.Once
-}{
-	metricsProvider: noopMetricsProvider{},
+	lastResourceVersion metrics.GaugeImpl
 }
 
 func newReflectorMetrics(name string) *reflectorMetrics {
@@ -100,20 +95,13 @@ func newReflectorMetrics(name string) *reflectorMetrics {
 		return ret
 	}
 	return &reflectorMetrics{
-		numberOfLists:        metricsFactory.metricsProvider.NewListsMetric(name),
-		listDuration:         metricsFactory.metricsProvider.NewListDurationMetric(name),
-		numberOfItemsInList:  metricsFactory.metricsProvider.NewItemsInListMetric(name),
-		numberOfWatches:      metricsFactory.metricsProvider.NewWatchesMetric(name),
-		numberOfShortWatches: metricsFactory.metricsProvider.NewShortWatchesMetric(name),
-		watchDuration:        metricsFactory.metricsProvider.NewWatchDurationMetric(name),
-		numberOfItemsInWatch: metricsFactory.metricsProvider.NewItemsInWatchMetric(name),
-		lastResourceVersion:  metricsFactory.metricsProvider.NewLastResourceVersionMetric(name),
+		numberOfLists:        listsTotal.WithLabelValues(name),
+		listDuration:         listsDuration.WithLabelValues(name),
+		numberOfItemsInList:  itemsPerList.WithLabelValues(name),
+		numberOfWatches:      watchesTotal.WithLabelValues(name),
+		numberOfShortWatches: shortWatchesTotal.WithLabelValues(name),
+		watchDuration:        watchDuration.WithLabelValues(name),
+		numberOfItemsInWatch: itemsPerWatch.WithLabelValues(name),
+		lastResourceVersion:  lastResourceVersion.WithLabelValues(name),
 	}
-}
-
-// SetReflectorMetricsProvider sets the metrics provider
-func SetReflectorMetricsProvider(metricsProvider MetricsProvider) {
-	metricsFactory.setProviders.Do(func() {
-		metricsFactory.metricsProvider = metricsProvider
-	})
 }
