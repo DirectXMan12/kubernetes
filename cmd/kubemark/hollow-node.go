@@ -36,7 +36,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
-	_ "k8s.io/kubernetes/pkg/client/metrics/prometheus" // for client metric registration
+	"k8s.io/client-go/tools/metrics/prometheus"
 	cadvisortest "k8s.io/kubernetes/pkg/kubelet/cadvisor/testing"
 	"k8s.io/kubernetes/pkg/kubelet/cm"
 	"k8s.io/kubernetes/pkg/kubelet/dockershim"
@@ -101,6 +101,8 @@ func (c *HollowNodeConfig) createClientConfigFromFile() (*restclient.Config, err
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
+
+	prometheus.ResolveToDefaultPrometheus()
 
 	command := newHollowNodeCommand()
 

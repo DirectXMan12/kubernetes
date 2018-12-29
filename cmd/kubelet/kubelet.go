@@ -29,12 +29,14 @@ import (
 	"k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/util/logs"
 	"k8s.io/kubernetes/cmd/kubelet/app"
-	_ "k8s.io/kubernetes/pkg/client/metrics/prometheus" // for client metric registration
+	"k8s.io/client-go/tools/metrics/prometheus"
 	_ "k8s.io/kubernetes/pkg/version/prometheus"        // for version metric registration
 )
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
+
+	prometheus.ResolveToDefaultPrometheus()
 
 	command := app.NewKubeletCommand(server.SetupSignalHandler())
 	logs.InitLogs()

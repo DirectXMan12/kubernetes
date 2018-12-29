@@ -27,7 +27,7 @@ import (
 
 	"k8s.io/apiserver/pkg/util/logs"
 	"k8s.io/kubernetes/cmd/cloud-controller-manager/app"
-	_ "k8s.io/kubernetes/pkg/client/metrics/prometheus" // for client metric registration
+	"k8s.io/client-go/tools/metrics/prometheus"
 	// NOTE: Importing all in-tree cloud-providers is not required when
 	// implementing an out-of-tree cloud-provider.
 	_ "k8s.io/kubernetes/pkg/cloudprovider/providers"
@@ -36,6 +36,8 @@ import (
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
+
+	prometheus.ResolveToDefaultPrometheus()
 
 	command := app.NewCloudControllerManagerCommand()
 

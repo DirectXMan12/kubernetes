@@ -41,13 +41,15 @@ import (
 	kubeproxy "k8s.io/kubernetes/cmd/kube-proxy/app"
 	kubescheduler "k8s.io/kubernetes/cmd/kube-scheduler/app"
 	kubelet "k8s.io/kubernetes/cmd/kubelet/app"
-	_ "k8s.io/kubernetes/pkg/client/metrics/prometheus" // for client metric registration
+	"k8s.io/client-go/tools/metrics/prometheus"
 	kubectl "k8s.io/kubernetes/pkg/kubectl/cmd"
 	_ "k8s.io/kubernetes/pkg/version/prometheus" // for version metric registration
 )
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
+
+	prometheus.ResolveToDefaultPrometheus()
 
 	hyperkubeCommand, allCommandFns := NewHyperKubeCommand(server.SetupSignalHandler())
 
