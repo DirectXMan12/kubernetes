@@ -50,7 +50,23 @@ var (
 	// longThrottleLatency defines threshold for logging requests. All requests being
 	// throttle for more than longThrottleLatency will be logged.
 	longThrottleLatency = 50 * time.Millisecond
+
+	requestLatency = metrics.NewHistogramVec(metrics.Histogram{
+		Name:    "rest_client_request_latency_seconds",
+		Help:    "Request latency in seconds. Broken down by verb and URL.",
+		/* TODO: Buckets: prometheus.ExponentialBuckets(0.001, 2, 10), */
+	}, "verb", "url")
+
+	requestResult = metrics.NewCounterVec(metrics.Counter{
+		Name: "rest_client_requests_total",
+		Help: "Number of HTTP requests, partitioned by status code, method, and host.",
+	}, "code", "method", "host")
 )
+
+func init() {
+	requestLatency.MustRegisterIn(metrics.DefaultRegistry())
+	requestResult.MustRegisterIn(metrics.DefaultRegistry())
+}
 
 // HTTPClient is an interface for testing a request object.
 type HTTPClient interface {
@@ -609,10 +625,10 @@ func updateURLMetrics(req *Request, resp *http.Response, err error) {
 	// Errors can be arbitrary strings. Unbound label cardinality is not suitable for a metric
 	// system so we just report them as `<error>`.
 	if err != nil {
-		metrics.RequestResult.Increment("<error>", req.verb, url)
+		requestResult.WithLabelValues("<error>", req.verb, url).Inc()
 	} else {
-		//Metrics for failure codes
-		metrics.RequestResult.Increment(strconv.Itoa(resp.StatusCode), req.verb, url)
+		// Metrics for failure codes
+		requestResult.WithLabelValues(strconv.Itoa(resp.StatusCode), req.verb, url).Inc()
 	}
 }
 
@@ -679,7 +695,8 @@ func (r *Request) request(fn func(*http.Request, *http.Response)) error {
 	//Metrics for total request latency
 	start := time.Now()
 	defer func() {
-		metrics.RequestLatency.Observe(r.verb, r.finalURLTemplate(), time.Since(start))
+		u := r.finalURLTemplate()
+		requestLatency.WithLabelValues(r.verb, u.String()).Observe(time.Since(start).Seconds())
 	}()
 
 	if r.err != nil {
