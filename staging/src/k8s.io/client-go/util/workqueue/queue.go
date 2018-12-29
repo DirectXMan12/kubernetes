@@ -41,7 +41,7 @@ func NewNamed(name string) *Type {
 	rc := clock.RealClock{}
 	return newQueue(
 		rc,
-		globalMetricsFactory.newQueueMetrics(name, rc),
+		newQueueMetrics(name, rc),
 		defaultUnfinishedWorkUpdatePeriod,
 	)
 }

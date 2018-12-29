@@ -17,11 +17,62 @@ limitations under the License.
 package workqueue
 
 import (
-	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/clock"
+	"k8s.io/client-go/tools/metrics"
 )
+
+var (
+	depth = metrics.NewGaugeVec(metrics.Gauge{
+		Name:      "depth",
+		Help:      "Current depth of workqueue",
+	}, "workqueue")
+
+	adds = metrics.NewCounterVec(metrics.Counter{
+		Name:      "adds",
+		Help:      "Total number of adds handled by workqueue",
+	}, "workqueue")
+
+	latency = metrics.NewHistogramVec(metrics.Histogram{
+		Name:      "queue_latency",
+		Help:      "How long an item stays in workqueue before being requested.",
+	}, "workqueue")
+
+	workDuration = metrics.NewHistogramVec(metrics.Histogram{
+		Name:      "work_duration",
+		Help:      "How long processing an item from workqueue takes.",
+	}, "workqueue")
+
+	unfinished = metrics.NewGaugeVec(metrics.Gauge{
+		Name:      "unfinished_work_seconds",
+		Help: "How many seconds of work has done that " +
+			"is in progress and hasn't been observed by work_duration. Large " +
+			"values indicate stuck threads. One can deduce the number of stuck " +
+			"threads by observing the rate at which this increases.",
+	}, "workqueue")
+
+	longestRunning = metrics.NewGaugeVec(metrics.Gauge{
+		Name:      "longest_running_processor_microseconds",
+		Help: "How many microseconds has the longest running " +
+			"processor for been running.",
+	}, "workqueue")
+
+	retries = metrics.NewCounterVec(metrics.Counter{
+		Name:      "retries",
+		Help:      "Total number of retries handled by workqueue",
+	}, "workqueue")
+)
+
+func init() {
+	depth.MustRegisterIn(metrics.DefaultRegistry())
+	adds.MustRegisterIn(metrics.DefaultRegistry())
+	latency.MustRegisterIn(metrics.DefaultRegistry())
+	workDuration.MustRegisterIn(metrics.DefaultRegistry())
+	unfinished.MustRegisterIn(metrics.DefaultRegistry())
+	longestRunning.MustRegisterIn(metrics.DefaultRegistry())
+	retries.MustRegisterIn(metrics.DefaultRegistry())
+}
 
 // This file provides abstractions for setting the provider (e.g., prometheus)
 // of metrics.
@@ -33,55 +84,24 @@ type queueMetrics interface {
 	updateUnfinishedWork()
 }
 
-// GaugeMetric represents a single numerical value that can arbitrarily go up
-// and down.
-type GaugeMetric interface {
-	Inc()
-	Dec()
-}
-
-// SettableGaugeMetric represents a single numerical value that can arbitrarily go up
-// and down. (Separate from GaugeMetric to preserve backwards compatibility.)
-type SettableGaugeMetric interface {
-	Set(float64)
-}
-
-// CounterMetric represents a single numerical value that only ever
-// goes up.
-type CounterMetric interface {
-	Inc()
-}
-
-// SummaryMetric captures individual observations.
-type SummaryMetric interface {
-	Observe(float64)
-}
-
-type noopMetric struct{}
-
-func (noopMetric) Inc()            {}
-func (noopMetric) Dec()            {}
-func (noopMetric) Set(float64)     {}
-func (noopMetric) Observe(float64) {}
-
 // defaultQueueMetrics expects the caller to lock before setting any metrics.
 type defaultQueueMetrics struct {
 	clock clock.Clock
 
 	// current depth of a workqueue
-	depth GaugeMetric
+	depth metrics.GaugeImpl
 	// total number of adds handled by a workqueue
-	adds CounterMetric
+	adds metrics.CounterImpl
 	// how long an item stays in a workqueue
-	latency SummaryMetric
+	latency metrics.HistogramImpl
 	// how long processing an item from a workqueue takes
-	workDuration         SummaryMetric
+	workDuration         metrics.HistogramImpl
 	addTimes             map[t]time.Time
 	processingStartTimes map[t]time.Time
 
 	// how long have current threads been working?
-	unfinishedWorkSeconds   SettableGaugeMetric
-	longestRunningProcessor SettableGaugeMetric
+	unfinishedWorkSeconds   metrics.GaugeImpl
+	longestRunningProcessor metrics.GaugeImpl
 }
 
 func (m *defaultQueueMetrics) add(item t) {
@@ -138,13 +158,6 @@ func (m *defaultQueueMetrics) updateUnfinishedWork() {
 	m.longestRunningProcessor.Set(oldest) // in microseconds.
 }
 
-type noMetrics struct{}
-
-func (noMetrics) add(item t)            {}
-func (noMetrics) get(item t)            {}
-func (noMetrics) done(item t)           {}
-func (noMetrics) updateUnfinishedWork() {}
-
 // Gets the time since the specified start in microseconds.
 func (m *defaultQueueMetrics) sinceInMicroseconds(start time.Time) float64 {
 	return float64(m.clock.Since(start).Nanoseconds() / time.Microsecond.Nanoseconds())
@@ -155,7 +168,7 @@ type retryMetrics interface {
 }
 
 type defaultRetryMetrics struct {
-	retries CounterMetric
+	retries metrics.CounterImpl
 }
 
 func (m *defaultRetryMetrics) retry() {
@@ -166,76 +179,15 @@ func (m *defaultRetryMetrics) retry() {
 	m.retries.Inc()
 }
 
-// MetricsProvider generates various metrics used by the queue.
-type MetricsProvider interface {
-	NewDepthMetric(name string) GaugeMetric
-	NewAddsMetric(name string) CounterMetric
-	NewLatencyMetric(name string) SummaryMetric
-	NewWorkDurationMetric(name string) SummaryMetric
-	NewUnfinishedWorkSecondsMetric(name string) SettableGaugeMetric
-	NewLongestRunningProcessorMicrosecondsMetric(name string) SettableGaugeMetric
-	NewRetriesMetric(name string) CounterMetric
-}
-
-type noopMetricsProvider struct{}
-
-func (_ noopMetricsProvider) NewDepthMetric(name string) GaugeMetric {
-	return noopMetric{}
-}
-
-func (_ noopMetricsProvider) NewAddsMetric(name string) CounterMetric {
-	return noopMetric{}
-}
-
-func (_ noopMetricsProvider) NewLatencyMetric(name string) SummaryMetric {
-	return noopMetric{}
-}
-
-func (_ noopMetricsProvider) NewWorkDurationMetric(name string) SummaryMetric {
-	return noopMetric{}
-}
-
-func (_ noopMetricsProvider) NewUnfinishedWorkSecondsMetric(name string) SettableGaugeMetric {
-	return noopMetric{}
-}
-
-func (_ noopMetricsProvider) NewLongestRunningProcessorMicrosecondsMetric(name string) SettableGaugeMetric {
-	return noopMetric{}
-}
-
-func (_ noopMetricsProvider) NewRetriesMetric(name string) CounterMetric {
-	return noopMetric{}
-}
-
-var globalMetricsFactory = queueMetricsFactory{
-	metricsProvider: noopMetricsProvider{},
-}
-
-type queueMetricsFactory struct {
-	metricsProvider MetricsProvider
-
-	onlyOnce sync.Once
-}
-
-func (f *queueMetricsFactory) setProvider(mp MetricsProvider) {
-	f.onlyOnce.Do(func() {
-		f.metricsProvider = mp
-	})
-}
-
-func (f *queueMetricsFactory) newQueueMetrics(name string, clock clock.Clock) queueMetrics {
-	mp := f.metricsProvider
-	if len(name) == 0 || mp == (noopMetricsProvider{}) {
-		return noMetrics{}
-	}
+func newQueueMetrics(name string, clock clock.Clock) queueMetrics {
 	return &defaultQueueMetrics{
 		clock:                   clock,
-		depth:                   mp.NewDepthMetric(name),
-		adds:                    mp.NewAddsMetric(name),
-		latency:                 mp.NewLatencyMetric(name),
-		workDuration:            mp.NewWorkDurationMetric(name),
-		unfinishedWorkSeconds:   mp.NewUnfinishedWorkSecondsMetric(name),
-		longestRunningProcessor: mp.NewLongestRunningProcessorMicrosecondsMetric(name),
+		depth:                   depth.WithLabelValues(name),
+		adds:                    adds.WithLabelValues(name),
+		latency:                 latency.WithLabelValues(name),
+		workDuration:            workDuration.WithLabelValues(name),
+		unfinishedWorkSeconds:   unfinished.WithLabelValues(name),
+		longestRunningProcessor: longestRunning.WithLabelValues(name),
 		addTimes:                map[t]time.Time{},
 		processingStartTimes:    map[t]time.Time{},
 	}
@@ -247,12 +199,6 @@ func newRetryMetrics(name string) retryMetrics {
 		return ret
 	}
 	return &defaultRetryMetrics{
-		retries: globalMetricsFactory.metricsProvider.NewRetriesMetric(name),
+		retries: retries.WithLabelValues(name),
 	}
-}
-
-// SetProvider sets the metrics provider for all subsequently created work
-// queues. Only the first call has an effect.
-func SetProvider(metricsProvider MetricsProvider) {
-	globalMetricsFactory.setProvider(metricsProvider)
 }
