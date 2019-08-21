@@ -61,8 +61,8 @@ type Object interface {
 	SetOwnerReferences([]OwnerReference)
 	GetClusterName() string
 	SetClusterName(clusterName string)
-	GetManagedFields() []ManagedFieldsEntry
-	SetManagedFields(managedFields []ManagedFieldsEntry)
+	GetManagedFields() *ManagedFields
+	SetManagedFields(managedFields *ManagedFields)
 }
 
 // ListMetaAccessor retrieves the list interface from an object
@@ -106,6 +106,8 @@ type Type interface {
 }
 
 var _ ListInterface = &ListMeta{}
+
+var _ Object = &ObjectMeta{}
 
 func (meta *ListMeta) GetResourceVersion() string        { return meta.ResourceVersion }
 func (meta *ListMeta) SetResourceVersion(version string) { meta.ResourceVersion = version }
@@ -172,7 +174,7 @@ func (meta *ObjectMeta) SetOwnerReferences(references []OwnerReference) {
 }
 func (meta *ObjectMeta) GetClusterName() string                 { return meta.ClusterName }
 func (meta *ObjectMeta) SetClusterName(clusterName string)      { meta.ClusterName = clusterName }
-func (meta *ObjectMeta) GetManagedFields() []ManagedFieldsEntry { return meta.ManagedFields }
-func (meta *ObjectMeta) SetManagedFields(managedFields []ManagedFieldsEntry) {
+func (meta *ObjectMeta) GetManagedFields() *ManagedFields { return meta.ManagedFields }
+func (meta *ObjectMeta) SetManagedFields(managedFields *ManagedFields) {
 	meta.ManagedFields = managedFields
 }

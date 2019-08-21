@@ -352,7 +352,7 @@ func TestApplyManagedFields(t *testing.T) {
 					"manager": "updater",
 					"operation": "Update",
 					"apiVersion": "v1",
-					"time": "` + accessor.GetManagedFields()[1].Time.UTC().Format(time.RFC3339) + `",
+					"time": "` + accessor.GetManagedFields().Fields[1].Time.UTC().Format(time.RFC3339) + `",
 					"fields": {
 						"f:data": {
 							"f:key": {}
@@ -419,7 +419,7 @@ func TestApplyRemovesEmptyManagedFields(t *testing.T) {
 		t.Fatalf("Failed to get meta accessor: %v", err)
 	}
 
-	if managed := accessor.GetManagedFields(); managed != nil {
+	if managed := accessor.GetManagedFields(); managed != nil && managed.Fields != nil {
 		t.Fatalf("Object contains unexpected managedFields: %v", managed)
 	}
 }
@@ -775,13 +775,13 @@ func TestApplyConvertsManagedFieldsVersion(t *testing.T) {
 	}
 
 	managed := accessor.GetManagedFields()
-	if len(managed) != 2 {
+	if managed == nil || len(managed.Fields) != 2 {
 		t.Fatalf("Expected 2 field managers, but got managed fields: %v", managed)
 	}
 
 	var actual *metav1.ManagedFieldsEntry
-	for i := range managed {
-		entry := &managed[i]
+	for i := range managed.Fields {
+		entry := &managed.Fields[i]
 		if entry.Manager == "sidecar_controller" && entry.APIVersion == "apps/v1" {
 			actual = entry
 		}
@@ -857,7 +857,7 @@ func TestClearManagedFieldsWithMergePatch(t *testing.T) {
 		t.Fatalf("Failed to get meta accessor: %v", err)
 	}
 
-	if managedFields := accessor.GetManagedFields(); len(managedFields) != 0 {
+	if managedFields := accessor.GetManagedFields(); managedFields == nil || len(managedFields.Fields) != 0 {
 		t.Fatalf("Failed to clear managedFields, got: %v", managedFields)
 	}
 }
@@ -913,7 +913,7 @@ func TestClearManagedFieldsWithStrategicMergePatch(t *testing.T) {
 		t.Fatalf("Failed to get meta accessor: %v", err)
 	}
 
-	if managedFields := accessor.GetManagedFields(); len(managedFields) != 0 {
+	if managedFields := accessor.GetManagedFields(); managedFields == nil || len(managedFields.Fields) != 0 {
 		t.Fatalf("Failed to clear managedFields, got: %v", managedFields)
 	}
 
@@ -973,7 +973,7 @@ func TestClearManagedFieldsWithJSONPatch(t *testing.T) {
 		t.Fatalf("Failed to get meta accessor: %v", err)
 	}
 
-	if managedFields := accessor.GetManagedFields(); len(managedFields) != 0 {
+	if managedFields := accessor.GetManagedFields().Fields; managedFields == nil || len(managedFields.Fields) != 0 {
 		t.Fatalf("Failed to clear managedFields, got: %v", managedFields)
 	}
 }
@@ -1043,7 +1043,7 @@ func TestClearManagedFieldsWithUpdate(t *testing.T) {
 		t.Fatalf("Failed to get meta accessor: %v", err)
 	}
 
-	if managedFields := accessor.GetManagedFields(); len(managedFields) != 0 {
+	if managedFields := accessor.GetManagedFields(); managedFields == nil || len(managedFields.Fields) != 0 {
 		t.Fatalf("Failed to clear managedFields, got: %v", managedFields)
 	}
 

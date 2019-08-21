@@ -167,6 +167,9 @@ type MediaTypeOptions struct {
 
 	// the accepted media type from the client
 	Accepted runtime.SerializerInfo
+
+	// the accepted field manager formats that the client wants
+	ManagedFieldsFormat string
 }
 
 // acceptMediaTypeOptions returns an options object that matches the provided media type params. If
@@ -220,6 +223,9 @@ func acceptMediaTypeOptions(params map[string]string, accepts *runtime.Serialize
 		// if specified, the pretty serializer will be used
 		case "pretty":
 			options.Pretty = v == "1"
+
+		case "managedfields":
+			options.ManagedFieldsFormat = v
 
 		default:
 			options.Unrecognized = append(options.Unrecognized, k)

@@ -40,20 +40,26 @@ func RemoveObjectManagedFields(obj runtime.Object) {
 }
 
 // DecodeObjectManagedFields extracts and converts the objects ManagedFields into a fieldpath.ManagedFields.
-func DecodeObjectManagedFields(from runtime.Object) (fieldpath.ManagedFields, error) {
+func DecodeObjectManagedFields(from runtime.Object) (fields fieldpath.ManagedFields, loadFromLive bool, err error) {
 	if from == nil {
-		return fieldpath.ManagedFields{}, nil
+		return fieldpath.ManagedFields{}, false, nil
 	}
 	accessor, err := meta.Accessor(from)
 	if err != nil {
 		panic(fmt.Sprintf("couldn't get accessor: %v", err))
 	}
 
-	managed, err := decodeManagedFields(accessor.GetManagedFields())
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert managed fields from API: %v", err)
+	manageInfo := accessor.GetManagedFields()
+	if manageInfo == nil || manageInfo.Type == "None" || manageInfo.Type == "" {
+		// we're explicitly none (or the client didn't know), so try from live
+		return fieldpath.ManagedFields{}, true, nil
 	}
-	return managed, err
+
+	managed, err := decodeManagedFields(manageInfo.Fields)
+	if err != nil {
+		return nil, true, fmt.Errorf("failed to convert managed fields from API: %v", err)
+	}
+	return managed, false, nil
 }
 
 // EncodeObjectManagedFields converts and stores the fieldpathManagedFields into the objects ManagedFields
@@ -67,7 +73,7 @@ func EncodeObjectManagedFields(obj runtime.Object, fields fieldpath.ManagedField
 	if err != nil {
 		return fmt.Errorf("failed to convert back managed fields to API: %v", err)
 	}
-	accessor.SetManagedFields(managed)
+	accessor.SetManagedFields(&metav1.ManagedFields{Type: "Fields", Fields: managed})
 
 	return nil
 }

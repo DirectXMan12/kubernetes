@@ -93,13 +93,13 @@ func (f *FieldManager) Update(liveObj, newObj runtime.Object, manager string) (r
 
 	// First try to decode the managed fields provided in the update,
 	// This is necessary to allow directly updating managed fields.
-	managed, err := internal.DecodeObjectManagedFields(newObj)
+	managed, tryLive, err := internal.DecodeObjectManagedFields(newObj)
 
 	// If the managed field is empty or we failed to decode it,
 	// let's try the live object. This is to prevent clients who
 	// don't understand managedFields from deleting it accidentally.
-	if err != nil || len(managed) == 0 {
-		managed, err = internal.DecodeObjectManagedFields(liveObj)
+	if err != nil || tryLive {
+		managed, _, err = internal.DecodeObjectManagedFields(liveObj)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode managed fields: %v", err)
 		}
@@ -154,7 +154,7 @@ func (f *FieldManager) Apply(liveObj runtime.Object, patch []byte, fieldManager 
 		return nil, fmt.Errorf("couldn't get accessor: %v", err)
 	}
 
-	managed, err := internal.DecodeObjectManagedFields(liveObj)
+	managed, _, err := internal.DecodeObjectManagedFields(liveObj)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode managed fields: %v", err)
 	}

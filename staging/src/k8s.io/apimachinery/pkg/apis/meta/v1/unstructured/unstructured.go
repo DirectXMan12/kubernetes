@@ -456,41 +456,34 @@ func (u *Unstructured) SetClusterName(clusterName string) {
 	u.setNestedField(clusterName, "metadata", "clusterName")
 }
 
-func (u *Unstructured) GetManagedFields() []metav1.ManagedFieldsEntry {
-	items, found, err := NestedSlice(u.Object, "metadata", "managedFields")
+func (u *Unstructured) GetManagedFields() *metav1.ManagedFields {
+	raw, found, err := NestedFieldNoCopy(u.Object, "metadata", "managedFields")
 	if !found || err != nil {
 		return nil
 	}
-	managedFields := []metav1.ManagedFieldsEntry{}
-	for _, item := range items {
-		m, ok := item.(map[string]interface{})
-		if !ok {
-			utilruntime.HandleError(fmt.Errorf("unable to retrieve managedFields for object, item %v is not a map", item))
-			return nil
-		}
-		out := metav1.ManagedFieldsEntry{}
-		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(m, &out); err != nil {
-			utilruntime.HandleError(fmt.Errorf("unable to retrieve managedFields for object: %v", err))
-			return nil
-		}
-		managedFields = append(managedFields, out)
+	m, ok := raw.(map[string]interface{})
+	if !ok {
+		utilruntime.HandleError(fmt.Errorf("unable to retrieve managedFields for object, item %v is not a map", raw))
+		return nil
 	}
-	return managedFields
+	var managedFields metav1.ManagedFields
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(m, &managedFields); err != nil {
+		utilruntime.HandleError(fmt.Errorf("unable to retrieve managedFields for object: %v", err))
+		return nil
+	}
+
+	return &managedFields
 }
 
-func (u *Unstructured) SetManagedFields(managedFields []metav1.ManagedFieldsEntry) {
+func (u *Unstructured) SetManagedFields(managedFields *metav1.ManagedFields) {
 	if managedFields == nil {
 		RemoveNestedField(u.Object, "metadata", "managedFields")
 		return
 	}
-	items := []interface{}{}
-	for _, managedFieldsEntry := range managedFields {
-		out, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&managedFieldsEntry)
-		if err != nil {
-			utilruntime.HandleError(fmt.Errorf("unable to set managedFields for object: %v", err))
-			return
-		}
-		items = append(items, out)
+	out, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&managedFields)
+	if err != nil {
+		utilruntime.HandleError(fmt.Errorf("unable to set managedFields for object: %v", err))
+		return
 	}
-	u.setNestedSlice(items, "metadata", "managedFields")
+	u.setNestedField(out, "metadata", "managedFields")
 }

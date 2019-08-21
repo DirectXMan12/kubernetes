@@ -111,7 +111,7 @@ func TestApplyStripsFields(t *testing.T) {
 		t.Fatalf("couldn't get accessor: %v", err)
 	}
 
-	if m := accessor.GetManagedFields(); len(m) != 0 {
+	if m := accessor.GetManagedFields(); m != nil && len(m.Fields) != 0 {
 		t.Fatalf("fields did not get stripped on apply: %v", m)
 	}
 }
@@ -172,7 +172,7 @@ func TestApplyDoesNotStripLabels(t *testing.T) {
 		t.Fatalf("couldn't get accessor: %v", err)
 	}
 
-	if m := accessor.GetManagedFields(); len(m) != 1 {
+	if m := accessor.GetManagedFields(); m != nil && len(m.Fields) != 1 {
 		t.Fatalf("labels shouldn't get stripped on apply: %v", m)
 	}
 }

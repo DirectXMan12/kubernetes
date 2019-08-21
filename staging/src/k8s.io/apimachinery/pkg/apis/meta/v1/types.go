@@ -274,7 +274,14 @@ type ObjectMeta struct {
 	// This field is alpha and can be changed or removed without notice.
 	//
 	// +optional
-	ManagedFields []ManagedFieldsEntry `json:"managedFields,omitempty" protobuf:"bytes,17,rep,name=managedFields"`
+	ManagedFields *ManagedFields `json:"managedFields,omitempty" protobuf:"bytes,17,opt,name=managedFields"`
+}
+
+type ManagedFields struct {
+	Type string `json:"type,omitempty" protobuf:"bytes,1,name=type"`
+
+	// +optional
+	Fields []ManagedFieldsEntry `json:"fields,omitempty" protobuf:"bytes,2,opt,name=fields"`
 }
 
 const (

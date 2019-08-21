@@ -480,6 +480,13 @@ message ListOptions {
   optional string continue = 8;
 }
 
+message ManagedFields {
+  optional string type = 1;
+
+  // +optional
+  repeated ManagedFieldsEntry fields = 2;
+}
+
 // ManagedFieldsEntry is a workflow-id, a FieldSet and the group version of the resource
 // that the fieldset applies to.
 message ManagedFieldsEntry {
@@ -689,7 +696,7 @@ message ObjectMeta {
   // This field is alpha and can be changed or removed without notice.
   //
   // +optional
-  repeated ManagedFieldsEntry managedFields = 17;
+  optional ManagedFields managedFields = 17;
 }
 
 // OwnerReference contains enough information to let you identify an owning

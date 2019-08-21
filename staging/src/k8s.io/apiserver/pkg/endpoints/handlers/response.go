@@ -32,6 +32,8 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/handlers/negotiation"
 	"k8s.io/apiserver/pkg/endpoints/handlers/responsewriters"
 	utiltrace "k8s.io/utils/trace"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/apiserver/pkg/features"
 )
 
 // transformObject takes the object as returned by storage and ensures it is in
@@ -42,6 +44,10 @@ func transformObject(ctx context.Context, obj runtime.Object, opts interface{}, 
 		return obj, nil
 	}
 	if err := setObjectSelfLink(ctx, obj, req, scope.Namer); err != nil {
+		return nil, err
+	}
+
+	if err := transformFieldManager(ctx, obj, mediaType); err != nil {
 		return nil, err
 	}
 
@@ -117,6 +123,49 @@ func transformResponseObject(ctx context.Context, scope *RequestScope, trace *ut
 	}
 	kind, serializer, _ := targetEncodingForTransform(scope, mediaType, req)
 	responsewriters.WriteObjectNegotiated(serializer, scope, kind.GroupVersion(), w, req, statusCode, obj)
+}
+
+func transformFieldManager(ctx context.Context, obj runtime.Object, mediaType negotiation.MediaTypeOptions) error {
+	if !utilfeature.DefaultFeatureGate.Enabled(features.ServerSideApply) {
+		return nil
+	}
+
+	fieldFmt := mediaType.ManagedFieldsFormat
+	if fieldFmt == "" {
+		fieldFmt = "none"
+	}
+
+	// elide the manage fields unless otherwise requested
+	if !meta.IsListType(obj) {
+		// we're an object
+		objectMeta, err := meta.Accessor(obj)
+		if err != nil {
+			return errors.NewInternalError(err)
+		}
+		return clearOrSetFieldManager(objectMeta, fieldFmt)
+	}
+
+	// we're a list
+	return meta.EachListItem(obj, func(obj runtime.Object) error {
+		objectMeta, err := meta.Accessor(obj)
+		if err != nil {
+			return errors.NewInternalError(err)
+		}
+		return clearOrSetFieldManager(objectMeta, fieldFmt)
+	})
+}
+
+func clearOrSetFieldManager(objectMeta metav1.Object, format string) error {
+	switch format {
+	case "none":
+		objectMeta.SetManagedFields(&metav1.ManagedFields{Type: "None"})
+	case "fields":
+		// pass through normally
+	default:
+		// we should put logic in place to catch this during negotiation
+		return errors.NewBadRequest(fmt.Sprintf("invalid managed fields format %q", format))
+	}
+	return nil
 }
 
 // errNotAcceptable indicates Accept negotiation has failed
